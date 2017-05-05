@@ -1,5 +1,6 @@
 const discord = require("discord.js");
 var request = require('request');
+var fs =require('fs');
 
 const bot = new discord.Client();
 
@@ -10,9 +11,9 @@ var random = function getRandomArbitrary(min, max) {
 };
 
 var konachan = function (message) {
-	let messageSplit = message.content.split(' ');
-    let msgSearch = "";
-    let searchOrig = "";
+	var messageSplit = message.content.split(' ');
+    var msgSearch = "";
+    var searchOrig = "";
     for (var i = 1; i < messageSplit.length; i++) {
         if (i === 1) {
             searchOrig = messageSplit[i];
@@ -57,6 +58,33 @@ var konachan = function (message) {
     });
 };
 
+function testDroits(drois,message){
+    var modRole = message.guild.roles.find("name", drois);
+
+    if (!message.member.roles.has(modRole.id)){
+        console.log(message.mentions.users.size);
+		message.reply("le drois "+ drois+" est nécessaire");
+		return false;
+    }
+    else {
+    	return true;
+	}
+
+} // test si la persone ayant lancer la comande à les droits nécessaires
+
+function userPresent(message){
+    if (message.mentions.users.size === 0) {
+        message.reply("merci de citer un utilisateur");
+
+        return false;
+    }
+    else {
+    	return true;
+	}
+} // test si un utilisateur est citer dans la comande
+
+
+
 bot.on("ready", function(){
 	console.log("Bot on");
 	console.log	("Bonjours je suis "+ config.namebot);
@@ -64,29 +92,30 @@ bot.on("ready", function(){
 
 // permet de saluer une personne quand elle est ajouter au server
 bot.on("guildMemberAdd", function(member){
-		let guild = member.guild;
+		var guild = member.guild;
 		// la notation avec les ` permet d'executer des portion de code qui sont dans ${} et de faire la concaténation en même temps
 		guild.defaultChannel.sendMessage(`welcome ${member.user}`);
 });
 
-// dit bonjours et aurevoir
+// dit bonjour/ aurevoir si la variable "hello" dans config.json est "true"
 bot.on("presenceUpdate", (newMember, message) =>{
-	let guild = newMember.guild;
+	var guild = newMember.guild;
 
-	if (newMember.user.presence.status === "online"){
+	if (newMember.user.presence.status === "online" && config.hello === "true"){
 		guild.defaultChannel.sendMessage(`hi ${newMember.user}, taper "==help" pour les commandes`);
 	}
 
-	if (newMember.user.presence.status === "offline"){
+	if (newMember.user.presence.status === "offline" && config.hello === "true"){
 		guild.defaultChannel.sendMessage(`bye ${newMember.user}`);
 	}
 });
 
 bot.on("presenceUpdate", (oldMember, newMember) =>{
-	let guild = newMember.guild;
+	console.log("overwatch test");
+	var guild = newMember.guild;
 
 	// recherche si il existe un role "overwatch" qui existe parmis ceux existant
-	let playRole = guild.roles.find("name","Overwatch");
+	var playRole = guild.roles.find("name","Overwatch");
 
 	// si le role n'est pas trouver alors on sort de l'execution 
 	if (!playRole)return;
@@ -95,14 +124,17 @@ bot.on("presenceUpdate", (oldMember, newMember) =>{
 	// check en premier si un jeu est jouer, si on recherche le jeu alors qu'aucun est jouer alors sa crash
 	if (newMember.user.presence.game && newMember.user.presence.game.name === "Overwatch"){
 		newMember.addRole(playRole);
-	}else if (!newMember.usr.presence.game && newMember.role.has(playRole.id)){
+	}else if (!newMember.user.presence.game && newMember.roles.has(playRole.id)){
 			newMember.removeRole(playRole);
 	}
 });
 
 bot.on("message", function(message){
 
+
+
 	console.log("-----------------------------------------");
+
 	if (message.content === "@"+config.namebot){
 		message.reply('pong');
 	}
@@ -117,21 +149,21 @@ bot.on("message", function(message){
 		}
 
 	// split le message recue après le == pour recup la commande qui le suit
-	let command = message.content.split(" ")[0];
+	var command = message.content.split(" ")[0];
 	command = command.slice(config.prefix.length);
 	console.log("commande "+command);
 
 	// récupére ce qui vient après la commande entrer (si ont veut entrer des apramètres )
-	let args = message.content.split(" ").slice(1);
+	var args = message.content.split(" ").slice(1);
 	console.log("args "+args);
 
 	if (command === "pic"){
 		konachan(message);
 	}
-	if (command === 'add')
-		{
-			let numbers = args.map(n=> parseInt(n));
-			let total = numbers.reduce ( (p, c) => p+c);
+
+	if (command === 'add') {
+			var numbers = args.map(n=> parseInt(n));
+			var total = numbers.reduce ( (p, c) => p+c);
 			message.channel.sendMessage(total);
 		}
 
@@ -139,7 +171,7 @@ bot.on("message", function(message){
 	if (command === "say")
 			{
 					// récupére le role chat dans les roles présent
-				let modRole = message.guild.roles.find("name", "chat");
+				var modRole = message.guild.roles.find("name", "chat");
 				if (message.member.roles.has(modRole.id))
 				{
 					message.channel.sendMessage(args);			
@@ -153,38 +185,33 @@ bot.on("message", function(message){
 	//ici c'est pour kick quelqu'un
 	if (command === "kick"){
 
-		// vérification que la personne voulant kick aie les droit nécessaire
-		let modRole = message.guild.roles.find("name", "mod");
+		if(testDroits("mod",message) && userPresent(message) ) {
 
-		if (!message.member.roles.has(modRole.id)){
-			 console.log(message.mentions.users.size);
-			return	message.reply("la permision mod est nécessaire");
-		} 
 
-		// check si un user est citer dans la commande
-		if (message.mentions.users.size === 0) {
-			 message.reply("il faut quelqu'un a kick");
-			
-			 return;
-		}
 
-		// retourne le premier user nommer dans la commande
-		let kickMember = message.guild.member(message.mentions.users.first());
-		// regarde si le user les bien présent dans le server
-		if (!kickMember){
-			return message.reply("L'user n'est pas valide");
-		}
+				// check si le bot a la permision mod pour kicker
+				if (!message.guild.member(bot.user).roles.find("name", "mod")) {
+					return message.reply("le bot n'a pas la permision mod");
+				}
 
-			// check si le bot a la permision mod pour kicker
-		if(!message.guild.member(bot.user).hasPermission("mod")){
-			return message.reply("le bot n'a pas la permision mod");
-		}
-				// kick enfin le premier user qui a été citer dans la commande kick, 
+				// retourne le premier user nommer dans la commande
+				var user = message.mentions.users.first();
+
+				return;
+				// regarde si le user les bien présent dans le server
+				if (!user) {
+					return message.reply("L'user n'est pas valide");
+				}
+
+				//kick enfin le premier user qui a été citer dans la commande kick,
 				// envoie mesage de confirmation ou bien renvoie l'erreur. Le catch(console.error) ne marche qu'avec les commandes discord.js
-		kickMember.kick().then(member => {
-			message.reply(`${member.user.username} a bien été kick `).catch(console.error);
-		}).catch(console.error)
-	}	
+				// message.guild.member(message.mentions.users.first()).kick().then(member => { -> version antérieur au cas ou ça foire
+					message.guild.member(user).kick().then(member => {
+						console.log(member);
+					message.channel.send('Kicked!' + member.user.username);
+				}).catch(console.error);
+        }
+	}
 
 	if (command === "presentation"){
 			message.channel.sendMessage("Le bot est en test total, j'essaie de découvrir ce que ont peut faire avec la librairie \"discord.js\"");
@@ -198,16 +225,38 @@ bot.on("message", function(message){
 		message.channel.sendMessage("http://www.themarysue.com/wp-content/uploads/2014/09/banhammer.jpg");
 		// renvoie le message sans citer de personne. 
 	}
+
 	if (message.content.startsWith(config.prefix + 'blabla')){
 		message.channel.sendMessage('bloblo');
 		}
 
+	if (command === "hello"){
+
+			if(config.hello === "true" && args == "false"){
+				console.log("true -> false");
+				config.hello = "false";
+                fs.writeFile("./config.json", JSON.stringify(config), function (err) {
+                    if (err) return console.log(err);
+                    console.log(JSON.stringify(config));
+                    console.log('writing to ./config.json');
+                });
+			}
+			else if (config.hello === "false" && args == "true") {
+				console.log("false -> true");
+				config.hello = "true";
+                fs.writeFile("./config.json", JSON.stringify(config), function (err) {
+                    if (err) return console.log(err);
+                    console.log(JSON.stringify(config));
+                    console.log('writing to ./config.json');
+                });
+			}
+	} // Changement de la valeur "hello" dans le fichier json
 
 	// eval aparement c'est très puissant et si c'est pas sécuriser ça permet de metre le zbeu sur le serveur qui host le bot
 	if (command === "eval"){
 			return;
 
-	} 
+	}
 });
 
 
