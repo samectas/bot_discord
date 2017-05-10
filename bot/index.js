@@ -10,6 +10,13 @@ var random = function getRandomArbitrary(min, max) {
     return Math.floor(Math.random() * (max - min) + min);
 }; // fait un random
 
+
+var download = function(uri, filename, callback){
+
+    var name_pic = uri.substring(uri.indexOf('%'));
+    request(uri).pipe(fs.createWriteStream("pic/"+name_pic)).on('close', callback);
+}; // Télécharge une image
+
 var konachan = function (message) {
 	var messageSplit = message.content.split(' ');
     var msgSearch = "";
@@ -21,7 +28,10 @@ var konachan = function (message) {
             searchOrig = searchOrig + "+" + messageSplit[i];
         }
     }
-    msgSearch = 'order:score rating:questionableplus ' + searchOrig;
+
+    // rating permet de choisir le type d'image: safe, questionable, or explicit
+    //  limit permet de choisir le nombre de post qui sont charger via une seul requette (defaut 100)
+    msgSearch = 'order:score rating:'+config.pic_safe +" "+ searchOrig;
     request.get('https://konachan.com/post.json', {
         qs: {
             limit: 200,
@@ -34,14 +44,21 @@ var konachan = function (message) {
         if (!error && response.statusCode == 200) {
             try {
                 body = JSON.parse(body);
-                console.log(body);
             } catch (e) {
                 console.log(e);
             }
             if (typeof (body) !== 'undefined' && body.length > 0) {
                 var randome = random(0, body.length);
                 randome = Math.floor(randome);
+
+
+
+
                 if (typeof(body[randome]) !== 'undefined' && typeof (body[randome].file_url) !== 'undefined') {
+
+                	download(`http://${body[randome].file_url.substring(2)}`,`${body[randome].file_url.substring(2)}`,function(){
+                		console.log("image telecharger");
+                	})
                     message.channel.sendMessage(`http://${body[randome].file_url.substring(2)}`, function (err, message) {
                         if (err) return console.log(e);
                     });
@@ -49,10 +66,7 @@ var konachan = function (message) {
 
                 }
             } else {
-                message.reply(t('nsfw-images.nothing-found', {
-                    lngs: message.lang,
-                    tags: searchOrig
-                }));
+                message.reply('nsfw-images.nothing-found');
             }
         }
     });
@@ -64,7 +78,6 @@ function cat(message){
     let parsedBody = JSON.parse(body);
 
     let url = parsedBody.file;
-    console.log(url);
     message.channel.sendMessage(url);
 });
 
@@ -216,7 +229,7 @@ bot.on("message", function(message){
 
 	// récupére ce qui vient après la commande entrer (si ont veut entrer des apramètres )
 	var args = message.content.split(" ").slice(1);
-	console.log("args "+args);
+	console.log("args:"+args+"|");
 
 	if (command === "pic"){
 		konachan(message);
@@ -227,7 +240,24 @@ bot.on("message", function(message){
 			var total = numbers.reduce ( (p, c) => p+c);
 			message.channel.sendMessage(total);
 		} // fait une adition
+ 
+ 	if ( command === 'substract'){
+			var numbers = args.map(n=> parseInt(n));
+			var total = numbers.reduce ( (p, c) => p-c);
+			message.channel.sendMessage(total);
+ 	}
 
+ 	if (command === 'multiply'){
+ 			var numbers = args.map(n=> parseInt(n));
+			var total = numbers.reduce ( (p, c) => p*c);
+			message.channel.sendMessage(total);
+ 	}
+ 	
+ 	if (command === 'divide'){
+ 		 	var numbers = args.map(n=> parseInt(n));
+			var total = numbers.reduce ( (p, c) => p/c);
+			message.channel.sendMessage(total);
+ 	}
 		// dir ce que on lui dit de dire mais seulemnt si la personne a le role chat
         // #Beug# : si ont met un espace dans les argument c'ets compter cimme retour a la ligne
 	if (command === "say") {
@@ -263,7 +293,7 @@ bot.on("message", function(message){
 		message.channel.sendMessage('bloblo');
 		} // autre manière de selectionner la comande qui vien après le préfix
 
-	if (command === "hello"){
+	if (command === "set_hello"){
 
 			if(config.hello === "true" && args == "false"){
 				console.log("true -> false");
@@ -285,10 +315,23 @@ bot.on("message", function(message){
 			}
 	} // Changement de la valeur "hello" dans le fichier json pour que le bot dise bonjour ou non
 
+	if (command === "set_safe"){
+		 if (args == "safe" || args == "questionable" || args == "explicit") {
+			config.pic_safe = args;
+			fs.writeFile("./config.json", JSON.stringify(config), function (err) {
+	            if (err) return console.log(err);
+	        });
+	        message.reply("changement de configuration effectuer");
+		}
+		else {
+			console.log("help lancer");
+			return message.reply("les types de réglages sont:\n safe, questionable, explicit");
+		}
+	}// change la configuration du fichier json pour selectionner le type de filtre a apliquer aux images selectionner
+
 	// eval aparement c'est très puissant et si c'est pas sécuriser ça permet de metre le zbeu sur le serveur qui host le bot
 	if (command === "eval"){
 			return;
-
 	}
 
 	if (command === "cat"){
