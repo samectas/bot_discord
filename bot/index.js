@@ -8,7 +8,14 @@ const config = require("./config.json");
 
 var random = function getRandomArbitrary(min, max) {
     return Math.floor(Math.random() * (max - min) + min);
-};
+}; // fait un random
+
+
+var download = function(uri, filename, callback){
+
+    var name_pic = uri.substring(uri.indexOf('%'));
+    request(uri).pipe(fs.createWriteStream("pic/"+name_pic)).on('close', callback);
+}; // Télécharge une image
 
 var konachan = function (message) {
 	var messageSplit = message.content.split(' ');
@@ -21,7 +28,10 @@ var konachan = function (message) {
             searchOrig = searchOrig + "+" + messageSplit[i];
         }
     }
-    msgSearch = 'order:score rating:questionableplus ' + searchOrig;
+
+    // rating permet de choisir le type d'image: safe, questionable, or explicit
+    //  limit permet de choisir le nombre de post qui sont charger via une seul requette (defaut 100)
+    msgSearch = 'order:score rating:'+config.pic_safe +" "+ searchOrig;
     request.get('https://konachan.com/post.json', {
         qs: {
             limit: 200,
@@ -34,14 +44,21 @@ var konachan = function (message) {
         if (!error && response.statusCode == 200) {
             try {
                 body = JSON.parse(body);
-                console.log(body);
             } catch (e) {
                 console.log(e);
             }
             if (typeof (body) !== 'undefined' && body.length > 0) {
                 var randome = random(0, body.length);
                 randome = Math.floor(randome);
+
+
+
+
                 if (typeof(body[randome]) !== 'undefined' && typeof (body[randome].file_url) !== 'undefined') {
+
+                	download(`http://${body[randome].file_url.substring(2)}`,`${body[randome].file_url.substring(2)}`,function(){
+                		console.log("image telecharger");
+                	})
                     message.channel.sendMessage(`http://${body[randome].file_url.substring(2)}`, function (err, message) {
                         if (err) return console.log(e);
                     });
@@ -49,14 +66,22 @@ var konachan = function (message) {
 
                 }
             } else {
-                message.reply(t('nsfw-images.nothing-found', {
-                    lngs: message.lang,
-                    tags: searchOrig
-                }));
+                message.reply('nsfw-images.nothing-found');
             }
         }
     });
-};
+}; // affiche une image de konoachan (NSFW)
+
+function cat(message){
+
+    request.get('http://random.cat/meow', (err, response, body) => {
+    let parsedBody = JSON.parse(body);
+
+    let url = parsedBody.file;
+    message.channel.sendMessage(url);
+});
+
+} // fonction pour afficher un chat random
 
 function testDroits(drois,message){
     var modRole = message.guild.roles.find("name", drois);
@@ -83,12 +108,66 @@ function userPresent(message){
 	}
 } // test si un utilisateur est citer dans la comande
 
+function kick(message){
+    if(testDroits("mod",message) && userPresent(message) ) {
 
+
+
+        // check si le bot a la permision mod pour kicker
+        if (!message.guild.member(bot.user).roles.find("name", "mod")) {
+            return message.reply("le bot n'a pas la permision mod");
+        }
+
+        // retourne le premier user nommer dans la commande
+        var user = message.mentions.users.first();
+
+        // regarde si le user les bien présent dans le server
+        if (!user) {
+            return message.reply("L'user n'est pas valide");
+        }
+
+        //kick enfin le premier user qui a été citer dans la commande kick,
+        // envoie mesage de confirmation ou bien renvoie l'erreur. Le catch(console.error) ne marche qu'avec les commandes discord.js
+        // message.guild.member(message.mentions.users.first()).kick().then(member => { -> version antérieur au cas ou ça foire
+        message.guild.member(user).kick().then(member => {
+            message.channel.send('Kicked!' + member.user.username);
+    }).catch(console.error);
+    }
+} // fonction pour kick
+
+function ban(message){
+
+    if(testDroits("mod",message) && userPresent(message) ) {
+
+        // check si le bot a la permision mod pour kicker
+        if (!message.guild.member(bot.user).roles.find("name", "mod")) {
+            return message.reply("le bot n'a pas la permision mod");
+        }
+
+        // retourne le premier user nommer dans la commande
+        var user = message.mentions.users.first();
+
+        // regarde si le user les bien présent dans le server
+        if (!user) {
+            return message.reply("L'user n'est pas valide");
+        }
+
+        //ban enfin le premier user qui a été citer dans la commande ban,
+        // envoie mesage de confirmation ou bien renvoie l'erreur. Le catch(console.error) ne marche qu'avec les commandes discord.js
+        // message.guild.member(message.mentions.users.first()).kick().then(member => { -> version antérieur au cas ou ça foire
+
+        message.guild.ban(user.id).then(user => {
+            console.log(user);
+        message.channel.send('Ban Hammer on !' + user.username);
+        message.channel.sendMessage("http://www.themarysue.com/wp-content/uploads/2014/09/banhammer.jpg");
+    }).catch(console.error);
+    }
+}   // fonction pour ban
 
 bot.on("ready", function(){
 	console.log("Bot on");
 	console.log	("Bonjours je suis "+ config.namebot);
-});
+}); // Le bot est poli il salut quand il est mis en marche
 
 // permet de saluer une personne quand elle est ajouter au server
 bot.on("guildMemberAdd", function(member){
@@ -111,7 +190,7 @@ bot.on("presenceUpdate", (newMember, message) =>{
 });
 
 bot.on("presenceUpdate", (oldMember, newMember) =>{
-	console.log("overwatch test");
+
 	var guild = newMember.guild;
 
 	// recherche si il existe un role "overwatch" qui existe parmis ceux existant
@@ -135,11 +214,6 @@ bot.on("message", function(message){
 
 	console.log("-----------------------------------------");
 
-	if (message.content === "@"+config.namebot){
-		message.reply('pong');
-	}
-
-
 	// evite que le bot réponde a lui même
 	if (message.author.bot)return;
 
@@ -155,25 +229,44 @@ bot.on("message", function(message){
 
 	// récupére ce qui vient après la commande entrer (si ont veut entrer des apramètres )
 	var args = message.content.split(" ").slice(1);
-	console.log("args "+args);
+	console.log("args:"+args+"|");
 
 	if (command === "pic"){
 		konachan(message);
-	}
+	} // retourne une image de konoachan (nsfw)
 
 	if (command === 'add') {
 			var numbers = args.map(n=> parseInt(n));
 			var total = numbers.reduce ( (p, c) => p+c);
 			message.channel.sendMessage(total);
-		}
+		} // fait une adition
+ 
+ 	if ( command === 'substract'){
+			var numbers = args.map(n=> parseInt(n));
+			var total = numbers.reduce ( (p, c) => p-c);
+			message.channel.sendMessage(total);
+ 	}
 
+ 	if (command === 'multiply'){
+ 			var numbers = args.map(n=> parseInt(n));
+			var total = numbers.reduce ( (p, c) => p*c);
+			message.channel.sendMessage(total);
+ 	}
+ 	
+ 	if (command === 'divide'){
+ 		 	var numbers = args.map(n=> parseInt(n));
+			var total = numbers.reduce ( (p, c) => p/c);
+			message.channel.sendMessage(total);
+ 	}
 		// dir ce que on lui dit de dire mais seulemnt si la personne a le role chat
-	if (command === "say")
-			{
+        // #Beug# : si ont met un espace dans les argument c'ets compter cimme retour a la ligne
+	if (command === "say") {
 					// récupére le role chat dans les roles présent
 				var modRole = message.guild.roles.find("name", "chat");
+
 				if (message.member.roles.has(modRole.id))
 				{
+				    console.log(args);
 					message.channel.sendMessage(args);			
 				} 
 				else 
@@ -184,53 +277,23 @@ bot.on("message", function(message){
 
 	//ici c'est pour kick quelqu'un
 	if (command === "kick"){
+		kick(message);
 
-		if(testDroits("mod",message) && userPresent(message) ) {
-
-
-
-				// check si le bot a la permision mod pour kicker
-				if (!message.guild.member(bot.user).roles.find("name", "mod")) {
-					return message.reply("le bot n'a pas la permision mod");
-				}
-
-				// retourne le premier user nommer dans la commande
-				var user = message.mentions.users.first();
-
-				return;
-				// regarde si le user les bien présent dans le server
-				if (!user) {
-					return message.reply("L'user n'est pas valide");
-				}
-
-				//kick enfin le premier user qui a été citer dans la commande kick,
-				// envoie mesage de confirmation ou bien renvoie l'erreur. Le catch(console.error) ne marche qu'avec les commandes discord.js
-				// message.guild.member(message.mentions.users.first()).kick().then(member => { -> version antérieur au cas ou ça foire
-					message.guild.member(user).kick().then(member => {
-						console.log(member);
-					message.channel.send('Kicked!' + member.user.username);
-				}).catch(console.error);
-        }
-	}
-
-	if (command === "presentation"){
-			message.channel.sendMessage("Le bot est en test total, j'essaie de découvrir ce que ont peut faire avec la librairie \"discord.js\"");
 	}
 
 	if (command === "help"){
 		message.channel.sendMessage('==say <phrase>\n ==kick <people>\n ==add <number1> <number2> <number n>\n ==presentation\n ==pic <tag>\n');
-		}
+		} // afiche liste des commandes
 
 	if (command === "ban"){
-		message.channel.sendMessage("http://www.themarysue.com/wp-content/uploads/2014/09/banhammer.jpg");
-		// renvoie le message sans citer de personne. 
-	}
+        ban(message);
+	} // permet de ban une personne
 
 	if (message.content.startsWith(config.prefix + 'blabla')){
 		message.channel.sendMessage('bloblo');
-		}
+		} // autre manière de selectionner la comande qui vien après le préfix
 
-	if (command === "hello"){
+	if (command === "set_hello"){
 
 			if(config.hello === "true" && args == "false"){
 				console.log("true -> false");
@@ -250,13 +313,30 @@ bot.on("message", function(message){
                     console.log('writing to ./config.json');
                 });
 			}
-	} // Changement de la valeur "hello" dans le fichier json
+	} // Changement de la valeur "hello" dans le fichier json pour que le bot dise bonjour ou non
+
+	if (command === "set_safe"){
+		 if (args == "safe" || args == "questionable" || args == "explicit") {
+			config.pic_safe = args;
+			fs.writeFile("./config.json", JSON.stringify(config), function (err) {
+	            if (err) return console.log(err);
+	        });
+	        message.reply("changement de configuration effectuer");
+		}
+		else {
+			console.log("help lancer");
+			return message.reply("les types de réglages sont:\n safe, questionable, explicit");
+		}
+	}// change la configuration du fichier json pour selectionner le type de filtre a apliquer aux images selectionner
 
 	// eval aparement c'est très puissant et si c'est pas sécuriser ça permet de metre le zbeu sur le serveur qui host le bot
 	if (command === "eval"){
 			return;
-
 	}
+
+	if (command === "cat"){
+	    cat(message);
+    } //renvoie l'image random d'un chat
 });
 
 
