@@ -1,0 +1,5 @@
+-filtre obscénirté
+-ban /deban definitif temporaire
+-creation des salons avec les droit associée 
+-reponse en privé pour certaines commandes 
+-bot musique(ça va etre chaud donc pas sure)
